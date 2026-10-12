@@ -45,11 +45,20 @@ describe("My Token", () => {
   });
   describe("Transfer", () => {
     it("should have 0.5MT", async () => {
+      const signer0 = signers[0];
       const signer1 = signers[1];
-      await myTokenC.transfer(
-        hre.ethers.parseUnits("0.5", decimals),
-        signer1.address,
-      );
+      await expect(
+        await myTokenC.transfer(
+          hre.ethers.parseUnits("0.5", decimals),
+          signer1.address,
+        ),
+      )
+        .to.emit(myTokenC, "Transfer")
+        .withArgs(
+          signer0.address,
+          signer1.address,
+          hre.ethers.parseUnits("0.5", decimals),
+        );
       expect(await myTokenC.balanceOf(signer1)).equal(
         hre.ethers.parseUnits("0.5", decimals),
       );
