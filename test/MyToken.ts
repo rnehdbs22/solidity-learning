@@ -2,6 +2,7 @@ import hre from "hardhat";
 import { expect } from "chai";
 import { MyToken } from "../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
+import { any } from "hardhat/internal/core/params/argumentTypes";
 
 const mintingAmount = 100n;
 const decimals = 18n;
@@ -71,6 +72,62 @@ describe("My Token", () => {
           signer1.address,
         ),
       ).to.be.revertedWith("insufficient balance");
+    });
+  });
+  describe("TransferFrom", () => {
+    it("should emit Approval event", async () => {
+      const signer1 = signers[1];
+      await expect(
+        myTokenC.approve(
+          signer1.address,
+          hre.ethers.parseUnits("10", decimals),
+        ),
+      )
+        .to.emit(myTokenC, "Approval")
+        .withArgs(signer1.address, hre.ethers.parseUnits("10", decimals));
+    });
+    it("should be reverted with insufficient allowance error", async () => {
+      const signer0 = signers[0];
+      const signer1 = signers[1];
+      await expect(
+        myTokenC
+          .connect(signer1)
+          .transferFrom(
+            signer0.address,
+            signer1.address,
+            hre.ethers.parseUnits("1", decimals),
+          ),
+      ).to.be.revertedWith("insufficient allowance");
+    });
+    it("should transfer 1MT from signer0 to signer1 (approve & transferFrom)", async () => {
+      const signer0 = signers[0];
+      const signer1 = signers[1];
+      await expect(
+        myTokenC.approve(signer1.address, hre.ethers.parseUnits("1", decimals)),
+      )
+        .to.emit(myTokenC, "Approval")
+        .withArgs(signer1.address, hre.ethers.parseUnits("1", decimals));
+      await expect(
+        myTokenC
+          .connect(signer1)
+          .transferFrom(
+            signer0.address,
+            signer1.address,
+            hre.ethers.parseUnits("1", decimals),
+          ),
+      )
+        .to.emit(myTokenC, "Transfer")
+        .withArgs(
+          signer0.address,
+          signer1.address,
+          hre.ethers.parseUnits("1", decimals),
+        );
+      expect(await myTokenC.balanceOf(signer0)).equal(
+        mintingAmount * 10n ** decimals - hre.ethers.parseUnits("1", decimals),
+      );
+      expect(await myTokenC.balanceOf(signer1)).equal(
+        hre.ethers.parseUnits("1", decimals),
+      );
     });
   });
 });
