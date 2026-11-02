@@ -15,6 +15,10 @@ interface IMyToken {
 }
 
 contract TinyBank is ManagedAccess {
+    address[] public managers;
+    mapping(address => bool) public isManager;
+    mapping(address => bool) public confirmed;
+
     event Staked(address from, uint256 amount);
     event Withdraw(uint256 amount, address to);
 
@@ -22,14 +26,29 @@ contract TinyBank is ManagedAccess {
 
     mapping(address => uint256) public lastClaimedBlock;
     uint256 defaultRewardPerBlock = 1 * 10 ** 18;
-    uint256 rewardPerBlock;
+    uint256 public rewardPerBlock;
 
     mapping(address => uint256) public staked;
     uint256 public totalStaked;
 
-    constructor(IMyToken _stakingToken) ManagedAccess(msg.sender, msg.sender) {
+    constructor(
+        IMyToken _stakingToken,
+        address[] memory _managers
+    ) ManagedAccess(msg.sender, msg.sender) {
         stakingToken = _stakingToken;
         rewardPerBlock = defaultRewardPerBlock;
+
+        require(_managers.length >= 3, "At least 3 managers required");
+
+        for (uint256 i = 0; i < _managers.length; i++) {
+            address account = _managers[i];
+
+            require(account != address(0), "Invalid manager");
+            require(!isManager[account], "Manager already registered");
+
+            isManager[account] = true;
+            managers.push(account);
+        }
     }
 
     // who, when?
@@ -44,7 +63,7 @@ contract TinyBank is ManagedAccess {
         _;
     }
 
-    function setRewardPerBlock(uint256 _amount) external onlyManager {
+    function setRewardPerBlock(uint256 _amount) external onlyAllConfirmed {
         rewardPerBlock = _amount;
     }
 
@@ -62,5 +81,23 @@ contract TinyBank is ManagedAccess {
         staked[msg.sender] -= _amount;
         totalStaked -= _amount;
         emit Withdraw(_amount, msg.sender);
+    }
+    function confirm() external {
+        require(isManager[msg.sender], "You are not a manager");
+        confirmed[msg.sender] = true;
+    }
+
+    modifier onlyAllConfirmed() {
+        require(isManager[msg.sender], "You are not a manager");
+
+        for (uint256 i = 0; i < managers.length; i++) {
+            require(confirmed[managers[i]], "Not all confirmed yet");
+        }
+
+        _;
+
+        for (uint256 i = 0; i < managers.length; i++) {
+            confirmed[managers[i]] = false;
+        }
     }
 }

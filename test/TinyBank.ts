@@ -20,6 +20,7 @@ describe("TinyBank", () => {
 
     tinyBankC = await hre.ethers.deployContract("TinyBank", [
       await myTokenC.getAddress(),
+      [signers[0].address, signers[1].address, signers[2].address],
     ]);
     await myTokenC.setManager(tinyBankC.getAddress());
   });
@@ -80,12 +81,52 @@ describe("TinyBank", () => {
       );
     });
 
-    it("Should revert when changing rewardPerBlock by hacker", async () => {
-      const hacker = signers[3];
-      const rewardToChange = hre.ethers.parseUnits("10000", DECIMALS);
-      await expect(
-        tinyBankC.connect(hacker).setRewardPerBlock(rewardToChange),
-      ).to.be.revertedWith("You are not authorized to manage this contract");
+    describe("Multi Manager", () => {
+      it("should reject a non-manager", async () => {
+        const hacker = signers[3];
+        const amount = hre.ethers.parseUnits("2", DECIMALS);
+
+        await expect(tinyBankC.connect(hacker).confirm()).to.be.revertedWith(
+          "You are not a manager",
+        );
+
+        await expect(
+          tinyBankC.connect(hacker).setRewardPerBlock(amount),
+        ).to.be.revertedWith("You are not a manager");
+      });
+
+      it("should reject when not all managers confirmed", async () => {
+        const amount = hre.ethers.parseUnits("2", DECIMALS);
+
+        await tinyBankC.connect(signers[0]).confirm();
+        await tinyBankC.connect(signers[1]).confirm();
+
+        await tinyBankC.connect(signers[1]).confirm();
+
+        await expect(
+          tinyBankC.connect(signers[0]).setRewardPerBlock(amount),
+        ).to.be.revertedWith("Not all confirmed yet");
+      });
+
+      it("should change reward after all managers confirmed and reset confirmations", async () => {
+        const amount = hre.ethers.parseUnits("2", DECIMALS);
+
+        for (const manager of signers.slice(0, 3)) {
+          await tinyBankC.connect(manager).confirm();
+        }
+
+        await tinyBankC.connect(signers[0]).setRewardPerBlock(amount);
+
+        expect(await tinyBankC.rewardPerBlock()).equal(amount);
+
+        for (const manager of signers.slice(0, 3)) {
+          expect(await tinyBankC.confirmed(manager.address)).equal(false);
+        }
+
+        await expect(
+          tinyBankC.connect(signers[0]).setRewardPerBlock(amount),
+        ).to.be.revertedWith("Not all confirmed yet");
+      });
     });
   });
 });
