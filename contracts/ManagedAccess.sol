@@ -18,7 +18,7 @@ abstract contract ManagedAccess {
     modifier onlyManager() {
         require(
             msg.sender == manager,
-            "You are not authorized to manage this token"
+            "You are not authorized to manage this contract"
         );
         _;
     }
